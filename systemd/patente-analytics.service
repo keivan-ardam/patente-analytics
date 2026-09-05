@@ -1,0 +1,20 @@
+[Unit]
+Description=Patente Analytics FastAPI service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=keivan
+WorkingDirectory=/home/keivan/patente-analytics
+ExecStart=/home/keivan/patente-analytics/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
