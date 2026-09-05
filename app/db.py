@@ -57,7 +57,9 @@ def now() -> int:
     return int(time.time())
 
 
-def upsert_device(device_id: str, ts: int, country: Optional[str], new_session: bool) -> bool:
+def upsert_device(
+    device_id: str, ts: int, country: Optional[str], new_session: bool
+) -> bool:
     """Insert or update a device. Returns True if this is a brand-new device."""
     with _connect() as conn:
         row = conn.execute(
@@ -158,13 +160,13 @@ def get_stats(active_window_seconds: int, ts: int) -> dict:
             (active_cutoff,),
         ).fetchone()["c"]
 
-        total_devices = conn.execute(
-            "SELECT COUNT(*) AS c FROM devices"
-        ).fetchone()["c"]
+        total_devices = conn.execute("SELECT COUNT(*) AS c FROM devices").fetchone()[
+            "c"
+        ]
 
-        total_sessions = conn.execute(
-            "SELECT COUNT(*) AS c FROM sessions"
-        ).fetchone()["c"]
+        total_sessions = conn.execute("SELECT COUNT(*) AS c FROM sessions").fetchone()[
+            "c"
+        ]
 
         sessions_today = conn.execute(
             "SELECT COUNT(*) AS c FROM sessions WHERE started_at >= ?",
@@ -183,4 +185,65 @@ def get_stats(active_window_seconds: int, ts: int) -> dict:
         "total_sessions": total_sessions,
         "sessions_today": sessions_today,
         "devices_today": devices_today,
+    }
+
+
+def get_report(ts: int) -> dict:
+    """Detailed report: last 7 days of activity + top countries."""
+    day = 86400
+    week_start = ts - 7 * day
+    yesterday_start = (ts - (ts % day)) - day
+    yesterday_end = ts - (ts % day)
+
+    with _connect() as conn:
+        # Per-day breakdown for the last 7 days
+        daily = []
+        for d in range(6, -1, -1):
+            start = (ts - (ts % day)) - d * day
+            end = start + day
+            row = conn.execute(
+                "SELECT COUNT(*) AS sessions, COUNT(DISTINCT device_id) AS users "
+                "FROM sessions WHERE started_at >= ? AND started_at < ?",
+                (start, end),
+            ).fetchone()
+            daily.append(
+                {"days_ago": d, "sessions": row["sessions"], "users": row["users"]}
+            )
+
+        # Yesterday
+        y = conn.execute(
+            "SELECT COUNT(*) AS sessions, COUNT(DISTINCT device_id) AS users "
+            "FROM sessions WHERE started_at >= ? AND started_at < ?",
+            (yesterday_start, yesterday_end),
+        ).fetchone()
+
+        # Last 7 days totals
+        w = conn.execute(
+            "SELECT COUNT(*) AS sessions, COUNT(DISTINCT device_id) AS users "
+            "FROM sessions WHERE started_at >= ?",
+            (week_start,),
+        ).fetchone()
+
+        # Top countries (all-time)
+        countries = conn.execute(
+            "SELECT country, COUNT(*) AS c FROM sessions "
+            "WHERE country IS NOT NULL AND country != '' "
+            "GROUP BY country ORDER BY c DESC LIMIT 5"
+        ).fetchall()
+
+        # New devices today
+        today_start = ts - (ts % day)
+        new_today = conn.execute(
+            "SELECT COUNT(*) AS c FROM devices WHERE first_seen >= ?",
+            (today_start,),
+        ).fetchone()["c"]
+
+    return {
+        "daily": daily,
+        "yesterday_sessions": y["sessions"],
+        "yesterday_users": y["users"],
+        "week_sessions": w["sessions"],
+        "week_users": w["users"],
+        "new_devices_today": new_today,
+        "top_countries": [(r["country"], r["c"]) for r in countries],
     }

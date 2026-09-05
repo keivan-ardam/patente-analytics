@@ -31,10 +31,13 @@ async def lifespan(app: FastAPI):
     logger.info("Database ready at %s", config.DB_PATH)
     logger.info("Telegram enabled: %s", config.telegram_enabled)
     sweep_task = asyncio.create_task(sweep_loop())
+    # Bot command/button listener (long-polling)
+    poll_task = asyncio.create_task(telegram.poll_updates_loop())
     try:
         yield
     finally:
         sweep_task.cancel()
+        poll_task.cancel()
 
 
 app = FastAPI(title="Patente Analytics", version="1.0.0", lifespan=lifespan)
