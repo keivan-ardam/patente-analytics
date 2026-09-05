@@ -21,12 +21,8 @@ echo "==> Installing dependencies"
 
 # 2. .env file
 if [ ! -f "$REPO_DIR/.env" ]; then
-  echo "==> Creating .env from template (EDIT IT with your secrets!)"
+  echo "==> Creating .env from template"
   cp "$REPO_DIR/.env.example" "$REPO_DIR/.env"
-  echo "    A random ANALYTICS_SECRET has been generated for you:"
-  SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
-  sed -i "s#^ANALYTICS_SECRET=.*#ANALYTICS_SECRET=${SECRET}#" "$REPO_DIR/.env"
-  echo "    ANALYTICS_SECRET=${SECRET}"
   echo "    >>> Now edit $REPO_DIR/.env to add TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, ALLOWED_ORIGINS"
 fi
 

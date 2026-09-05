@@ -9,7 +9,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import db
@@ -44,15 +44,8 @@ app.add_middleware(
     allow_origins=config.ALLOWED_ORIGINS,
     allow_credentials=False,
     allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "X-Analytics-Secret"],
+    allow_headers=["Content-Type"],
 )
-
-
-def _check_secret(secret: str | None) -> None:
-    """Reject requests without the correct shared secret (if configured)."""
-    if config.ANALYTICS_SECRET:
-        if not secret or secret != config.ANALYTICS_SECRET:
-            raise HTTPException(status_code=401, detail="Invalid secret")
 
 
 def _country_from_request(request: Request) -> str | None:
@@ -66,16 +59,7 @@ async def health():
 
 
 @app.post("/event")
-async def ingest_event(
-    event: EventIn,
-    request: Request,
-    x_analytics_secret: str | None = Header(default=None),
-):
-    # sendBeacon (used on page unload) can't set headers, so also accept
-    # the secret via the "s" query parameter as a fallback.
-    secret = x_analytics_secret or request.query_params.get("s")
-    _check_secret(secret)
-
+async def ingest_event(event: EventIn, request: Request):
     ts = db.now()
     country = _country_from_request(request)
     user_agent = request.headers.get("user-agent")
@@ -108,6 +92,5 @@ async def ingest_event(
 
 
 @app.get("/stats", response_model=StatsOut)
-async def stats(x_analytics_secret: str | None = Header(default=None)):
-    _check_secret(x_analytics_secret)
+async def stats():
     return db.get_stats(config.SESSION_TIMEOUT_SECONDS, db.now())

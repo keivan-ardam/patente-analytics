@@ -18,12 +18,9 @@ class Config:
     TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
     TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID", "")
 
-    # Security
-    ANALYTICS_SECRET: str = os.getenv("ANALYTICS_SECRET", "")
+    # CORS
     ALLOWED_ORIGINS: list[str] = [
-        o.strip()
-        for o in os.getenv("ALLOWED_ORIGINS", "*").split(",")
-        if o.strip()
+        o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()
     ]
 
     # Notifications
