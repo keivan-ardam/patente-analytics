@@ -24,7 +24,7 @@ class Config:
     ]
 
     # Notifications
-    NOTIFY_COOLDOWN_SECONDS: int = int(os.getenv("NOTIFY_COOLDOWN_SECONDS", "300"))
+    NOTIFY_COOLDOWN_SECONDS: int = int(os.getenv("NOTIFY_COOLDOWN_SECONDS", "1800"))
     NOTIFY_ON_SESSION_END: bool = _get_bool("NOTIFY_ON_SESSION_END", False)
 
     # Sessions

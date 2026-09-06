@@ -188,6 +188,115 @@ def get_stats(active_window_seconds: int, ts: int) -> dict:
     }
 
 
+def get_active_timeseries(
+    ts: int, bucket_seconds: int = 1800, days: int = 7
+) -> list[dict]:
+    """Active users & sessions per time bucket over the last `days`.
+
+    A session counts toward every bucket its [started_at, last_seen] span
+    overlaps. Active users = distinct devices with any overlapping session in
+    the bucket. Buckets are aligned to bucket_seconds boundaries (UTC).
+    """
+    window = days * 86400
+    start = ((ts - window) // bucket_seconds) * bucket_seconds
+    end = (ts // bucket_seconds + 1) * bucket_seconds
+    n = (end - start) // bucket_seconds
+
+    # Pull only sessions that overlap the window at all.
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT device_id, started_at, "
+            "COALESCE(ended_at, last_seen) AS finished FROM sessions "
+            "WHERE COALESCE(ended_at, last_seen) >= ? AND started_at < ?",
+            (start, end),
+        ).fetchall()
+
+    # sessions[b] = count of sessions overlapping bucket b
+    # users[b] = set of device_ids overlapping bucket b
+    sess_counts = [0] * n
+    user_sets: list[set] = [set() for _ in range(n)]
+
+    for r in rows:
+        dev = r["device_id"]
+        s = r["started_at"]
+        f = max(r["finished"], s)  # guard against finished < started
+        b0 = max(0, (s - start) // bucket_seconds)
+        b1 = min(n - 1, (f - start) // bucket_seconds)
+        for b in range(int(b0), int(b1) + 1):
+            sess_counts[b] += 1
+            user_sets[b].add(dev)
+
+    return [
+        {
+            "t": start + i * bucket_seconds,
+            "users": len(user_sets[i]),
+            "sessions": sess_counts[i],
+        }
+        for i in range(n)
+    ]
+
+
+def get_summary(ts: int, active_window_seconds: int) -> dict:
+    """Focused metrics: live activity + rolling usage + engagement."""
+    day = 86400
+    active_cutoff = ts - active_window_seconds
+    today_start = ts - (ts % day)
+    week_start = ts - 7 * day
+
+    with _connect() as conn:
+        active_sessions = conn.execute(
+            "SELECT COUNT(*) c FROM sessions WHERE ended_at IS NULL AND last_seen >= ?",
+            (active_cutoff,),
+        ).fetchone()["c"]
+        active_users = conn.execute(
+            "SELECT COUNT(DISTINCT device_id) c FROM sessions "
+            "WHERE ended_at IS NULL AND last_seen >= ?",
+            (active_cutoff,),
+        ).fetchone()["c"]
+
+        sessions_today = conn.execute(
+            "SELECT COUNT(*) c FROM sessions WHERE started_at >= ?", (today_start,)
+        ).fetchone()["c"]
+        users_today = conn.execute(
+            "SELECT COUNT(DISTINCT device_id) c FROM sessions WHERE started_at >= ?",
+            (today_start,),
+        ).fetchone()["c"]
+        new_users_today = conn.execute(
+            "SELECT COUNT(*) c FROM devices WHERE first_seen >= ?", (today_start,)
+        ).fetchone()["c"]
+
+        sessions_week = conn.execute(
+            "SELECT COUNT(*) c FROM sessions WHERE started_at >= ?", (week_start,)
+        ).fetchone()["c"]
+        users_week = conn.execute(
+            "SELECT COUNT(DISTINCT device_id) c FROM sessions WHERE started_at >= ?",
+            (week_start,),
+        ).fetchone()["c"]
+
+        total_devices = conn.execute("SELECT COUNT(*) c FROM devices").fetchone()["c"]
+        total_sessions = conn.execute("SELECT COUNT(*) c FROM sessions").fetchone()["c"]
+
+        # Avg session duration (completed sessions, last 7d)
+        avg_dur = conn.execute(
+            "SELECT AVG(ended_at - started_at) d FROM sessions "
+            "WHERE ended_at IS NOT NULL AND ended_at >= started_at AND started_at >= ?",
+            (week_start,),
+        ).fetchone()["d"]
+
+    return {
+        "active_users": active_users,
+        "active_sessions": active_sessions,
+        "sessions_today": sessions_today,
+        "users_today": users_today,
+        "new_users_today": new_users_today,
+        "sessions_week": sessions_week,
+        "users_week": users_week,
+        "total_devices": total_devices,
+        "total_sessions": total_sessions,
+        "avg_session_seconds": round(avg_dur or 0),
+    }
+
+
 def get_report(ts: int) -> dict:
     """Detailed report: last 7 days of activity + top countries."""
     day = 86400

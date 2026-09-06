@@ -24,17 +24,17 @@ def _url(method: str) -> str:
     return _BASE.format(token=config.TELEGRAM_BOT_TOKEN, method=method)
 
 
-# The inline keyboard shown under messages
+# Public dashboard URL (rich time-series charts live here now).
+_DASHBOARD_URL = "https://analytics.patentechi.it/"
+
+
+# Minimal inline keyboard: a live snapshot + a link to the full dashboard.
 def _main_keyboard() -> dict:
     return {
         "inline_keyboard": [
             [
-                {"text": "📊 Live Stats", "callback_data": "stats"},
-                {"text": "📅 Today", "callback_data": "today"},
-            ],
-            [
-                {"text": "📈 7-Day Report", "callback_data": "report"},
-                {"text": "🌍 Countries", "callback_data": "countries"},
+                {"text": "📊 Live", "callback_data": "stats"},
+                {"text": "📈 Dashboard", "url": _DASHBOARD_URL},
             ],
         ]
     }
@@ -80,47 +80,12 @@ async def _answer_callback(callback_id: str) -> None:
 
 def _stats_text(stats: dict) -> str:
     return (
-        f"📊 <b>Live Stats</b>\n\n"
+        f"📊 <b>Live</b>\n\n"
         f"👥 Active now: <b>{stats['active_users']}</b> users "
         f"({stats['active_sessions']} sessions)\n"
-        f"📅 Today: {stats['sessions_today']} sessions, {stats['devices_today']} users\n"
-        f"📈 Total: {stats['total_devices']} users, {stats['total_sessions']} sessions"
+        f"📅 Today: {stats['sessions_today']} sessions · {stats['devices_today']} users\n\n"
+        f"📈 Full charts: {_DASHBOARD_URL}"
     )
-
-
-def _today_text(stats: dict, report: dict) -> str:
-    return (
-        f"📅 <b>Today</b>\n\n"
-        f"🆕 New users today: <b>{report['new_devices_today']}</b>\n"
-        f"👤 Returning + new: {stats['devices_today']} users\n"
-        f"▶️ Sessions today: {stats['sessions_today']}\n"
-        f"👥 Active right now: {stats['active_users']}"
-    )
-
-
-def _report_text(report: dict) -> str:
-    lines = ["📈 <b>7-Day Report</b>\n"]
-    labels = {0: "Today", 1: "Yesterday"}
-    for d in report["daily"]:
-        label = labels.get(d["days_ago"], f"{d['days_ago']}d ago")
-        bar = "▪" * min(d["sessions"], 20)
-        lines.append(
-            f"{label:>10}: {d['sessions']:>3} sess / {d['users']:>3} usr {bar}"
-        )
-    lines.append(
-        f"\n<b>Week total:</b> {report['week_sessions']} sessions, "
-        f"{report['week_users']} users"
-    )
-    return "\n".join(lines)
-
-
-def _countries_text(report: dict) -> str:
-    if not report["top_countries"]:
-        return "🌍 <b>Countries</b>\n\nNo country data yet."
-    lines = ["🌍 <b>Top Countries</b>\n"]
-    for code, count in report["top_countries"]:
-        lines.append(f"{code}: {count} sessions")
-    return "\n".join(lines)
 
 
 # ---------- Notifications ----------
@@ -142,21 +107,14 @@ async def notify_session_start(
     _pending_sessions = 0
     _last_notify_ts = now
 
-    flag = f" {country}" if country else ""
     new_badge = " 🆕" if is_new_device else ""
-    header = (
-        f"🟢 New session{new_badge}{flag}"
-        if count == 1
-        else f"🟢 {count} new sessions{flag}"
-    )
+    header = f"🟢 New session{new_badge}" if count == 1 else f"🟢 {count} new sessions"
     text = (
-        f"{header}\n"
-        f"👥 Active now: <b>{stats['active_users']}</b> users "
-        f"({stats['active_sessions']} sessions)\n"
-        f"📅 Today: {stats['sessions_today']} sessions, {stats['devices_today']} users\n"
-        f"📊 Total: {stats['total_devices']} users, {stats['total_sessions']} sessions"
+        f"{header} · "
+        f"👥 {stats['active_users']} active ({stats['active_sessions']} sess)"
     )
-    await send_message(text, with_keyboard=True)
+    # Quiet ping: no keyboard. Tap /stats or the menu when you want detail.
+    await send_message(text, with_keyboard=False)
 
 
 async def notify_session_end(stats: dict) -> None:
@@ -177,15 +135,6 @@ async def _handle_callback(data: str) -> None:
     stats = db.get_stats(config.SESSION_TIMEOUT_SECONDS, ts)
     if data == "stats":
         await send_message(_stats_text(stats), with_keyboard=True)
-    elif data == "today":
-        report = db.get_report(ts)
-        await send_message(_today_text(stats, report), with_keyboard=True)
-    elif data == "report":
-        report = db.get_report(ts)
-        await send_message(_report_text(report), with_keyboard=True)
-    elif data == "countries":
-        report = db.get_report(ts)
-        await send_message(_countries_text(report), with_keyboard=True)
 
 
 async def _handle_command(text: str) -> None:

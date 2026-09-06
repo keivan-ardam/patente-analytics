@@ -7,10 +7,12 @@ behind a Cloudflare Tunnel.
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from . import db
 from .config import config
@@ -97,3 +99,36 @@ async def ingest_event(event: EventIn, request: Request):
 @app.get("/stats", response_model=StatsOut)
 async def stats():
     return db.get_stats(config.SESSION_TIMEOUT_SECONDS, db.now())
+
+
+# ---------- Dashboard API ----------
+
+
+@app.get("/api/summary")
+async def api_summary():
+    """Focused live + rolling metrics for the dashboard."""
+    return db.get_summary(db.now(), config.SESSION_TIMEOUT_SECONDS)
+
+
+@app.get("/api/timeseries")
+async def api_timeseries(bucket_minutes: int = 30, days: int = 7):
+    """Active users & sessions per time bucket over the last N days."""
+    bucket_minutes = max(5, min(bucket_minutes, 240))
+    days = max(1, min(days, 30))
+    return {
+        "bucket_minutes": bucket_minutes,
+        "days": days,
+        "points": db.get_active_timeseries(
+            db.now(), bucket_seconds=bucket_minutes * 60, days=days
+        ),
+    }
+
+
+# ---------- Dashboard page ----------
+
+_DASHBOARD_PATH = os.path.join(os.path.dirname(__file__), "dashboard.html")
+
+
+@app.get("/")
+async def dashboard():
+    return FileResponse(_DASHBOARD_PATH)

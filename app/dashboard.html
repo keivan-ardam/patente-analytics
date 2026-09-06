@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Patentechi Analytics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --surface: #1e293b;
+        --surface-2: #334155;
+        --border: #334155;
+        --text: #f1f5f9;
+        --muted: #94a3b8;
+        --primary: #3b82f6;
+        --success: #34d399;
+        --accent: #fbbf24;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        padding: 20px;
+        max-width: 1000px;
+        margin: 0 auto;
+      }
+      header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 20px;
+      }
+      h1 { font-size: 20px; font-weight: 700; }
+      .updated { font-size: 12px; color: var(--muted); }
+      .live {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+      }
+      .live-card {
+        background: linear-gradient(135deg, #1e40af, #2563eb);
+        border-radius: 14px;
+        padding: 20px 24px;
+        flex: 1;
+        min-width: 160px;
+      }
+      .live-card .n { font-size: 40px; font-weight: 800; line-height: 1; }
+      .live-card .l { font-size: 13px; opacity: 0.85; margin-top: 6px; }
+      .live-card .dot {
+        display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+        background: var(--success); margin-right: 6px;
+        animation: pulse 1.6s infinite;
+      }
+      @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+      .stat {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px 16px;
+      }
+      .stat .n { font-size: 24px; font-weight: 700; }
+      .stat .l { font-size: 12px; color: var(--muted); margin-top: 4px; }
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 18px;
+        margin-bottom: 20px;
+      }
+      .panel h2 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+      .panel .sub { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+      .controls { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+      .controls button {
+        background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+        border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer;
+      }
+      .controls button.active { background: var(--primary); border-color: var(--primary); }
+      canvas { max-height: 320px; }
+      .err { color: #f87171; font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>📊 Patentechi Analytics</h1>
+      <span class="updated" id="updated">loading…</span>
+    </header>
+
+    <div class="live">
+      <div class="live-card">
+        <div class="n"><span class="dot"></span><span id="active-users">–</span></div>
+        <div class="l">Active users right now</div>
+      </div>
+      <div class="live-card" style="background: linear-gradient(135deg,#065f46,#059669)">
+        <div class="n" id="active-sessions">–</div>
+        <div class="l">Active sessions right now</div>
+      </div>
+    </div>
+
+    <div class="grid" id="stats"></div>
+
+    <div class="panel">
+      <h2>Active users over time</h2>
+      <div class="sub" id="chart-sub">Per 30-minute window · last 7 days</div>
+      <div class="controls" id="range-controls">
+        <button data-days="1" data-bucket="15">24h · 15m</button>
+        <button data-days="7" data-bucket="30" class="active">7d · 30m</button>
+        <button data-days="7" data-bucket="60">7d · 1h</button>
+        <button data-days="30" data-bucket="180">30d · 3h</button>
+      </div>
+      <canvas id="chart"></canvas>
+      <div class="err" id="chart-err"></div>
+    </div>
+
+    <script>
+      const REFRESH_MS = 15000;
+      let chart;
+      let range = { days: 7, bucket: 30 };
+
+      function fmtDur(s) {
+        if (!s) return "0s";
+        const m = Math.floor(s / 60), sec = s % 60;
+        return m ? `${m}m ${sec}s` : `${sec}s`;
+      }
+
+      async function loadSummary() {
+        try {
+          const r = await fetch("/api/summary");
+          const d = await r.json();
+          document.getElementById("active-users").textContent = d.active_users;
+          document.getElementById("active-sessions").textContent = d.active_sessions;
+          const cards = [
+            ["Users today", d.users_today],
+            ["Sessions today", d.sessions_today],
+            ["New users today", d.new_users_today],
+            ["Users (7d)", d.users_week],
+            ["Sessions (7d)", d.sessions_week],
+            ["Avg session", fmtDur(d.avg_session_seconds)],
+            ["Total users", d.total_devices],
+            ["Total sessions", d.total_sessions],
+          ];
+          document.getElementById("stats").innerHTML = cards
+            .map(
+              ([l, n]) =>
+                `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`
+            )
+            .join("");
+          document.getElementById("updated").textContent =
+            "Updated " + new Date().toLocaleTimeString();
+        } catch (e) {
+          document.getElementById("updated").textContent = "Update failed";
+        }
+      }
+
+      async function loadChart() {
+        const errEl = document.getElementById("chart-err");
+        errEl.textContent = "";
+        try {
+          const r = await fetch(
+            `/api/timeseries?days=${range.days}&bucket_minutes=${range.bucket}`
+          );
+          const d = await r.json();
+          const labels = d.points.map((p) => {
+            const dt = new Date(p.t * 1000);
+            return range.days <= 1
+              ? dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+              : dt.toLocaleDateString([], { month: "short", day: "numeric" }) +
+                  " " +
+                  dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+          });
+          const users = d.points.map((p) => p.users);
+          const sessions = d.points.map((p) => p.sessions);
+          document.getElementById("chart-sub").textContent =
+            `Per ${d.bucket_minutes}-minute window · last ${d.days} day(s)`;
+
+          const ds = [
+            {
+              label: "Active users",
+              data: users,
+              borderColor: "#3b82f6",
+              backgroundColor: "rgba(59,130,246,0.15)",
+              fill: true,
+              tension: 0.3,
+              pointRadius: 0,
+              borderWidth: 2,
+            },
+            {
+              label: "Active sessions",
+              data: sessions,
+              borderColor: "#fbbf24",
+              backgroundColor: "transparent",
+              fill: false,
+              tension: 0.3,
+              pointRadius: 0,
+              borderWidth: 1.5,
+              borderDash: [4, 3],
+            },
+          ];
+          if (chart) {
+            chart.data.labels = labels;
+            chart.data.datasets = ds;
+            chart.update();
+          } else {
+            chart = new Chart(document.getElementById("chart"), {
+              type: "line",
+              data: { labels, datasets: ds },
+              options: {
+                responsive: true,
+                interaction: { mode: "index", intersect: false },
+                plugins: {
+                  legend: { labels: { color: "#94a3b8", boxWidth: 12 } },
+                },
+                scales: {
+                  x: {
+                    ticks: { color: "#64748b", maxTicksLimit: 12, autoSkip: true },
+                    grid: { color: "rgba(148,163,184,0.08)" },
+                  },
+                  y: {
+                    beginAtZero: true,
+                    ticks: { color: "#64748b", precision: 0 },
+                    grid: { color: "rgba(148,163,184,0.08)" },
+                  },
+                },
+              },
+            });
+          }
+        } catch (e) {
+          errEl.textContent = "Could not load chart data.";
+        }
+      }
+
+      document.getElementById("range-controls").addEventListener("click", (e) => {
+        const btn = e.target.closest("button");
+        if (!btn) return;
+        document
+          .querySelectorAll("#range-controls button")
+          .forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        range = { days: +btn.dataset.days, bucket: +btn.dataset.bucket };
+        loadChart();
+      });
+
+      function refresh() {
+        loadSummary();
+        loadChart();
+      }
+      refresh();
+      setInterval(refresh, REFRESH_MS);
+    </script>
+  </body>
+</html>
