@@ -18,11 +18,16 @@
         --success: #34d399;
         --accent: #fbbf24;
       }
-      * { box-sizing: border-box; margin: 0; padding: 0; }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
       body {
         background: var(--bg);
         color: var(--text);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         padding: 20px;
         max-width: 1000px;
         margin: 0 auto;
@@ -35,8 +40,48 @@
         gap: 8px;
         margin-bottom: 20px;
       }
-      h1 { font-size: 20px; font-weight: 700; }
-      .updated { font-size: 12px; color: var(--muted); }
+      h1 {
+        font-size: 20px;
+        font-weight: 700;
+      }
+      .updated {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .head-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      #refresh-btn {
+        background: var(--surface-2);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 13px;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      #refresh-btn:hover {
+        background: var(--primary);
+        border-color: var(--primary);
+      }
+      #refresh-btn:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+      #refresh-btn .ic {
+        display: inline-block;
+      }
+      #refresh-btn.spinning .ic {
+        animation: rot 0.6s linear infinite;
+      }
+      @keyframes rot {
+        to {
+          transform: rotate(360deg);
+        }
+      }
       .live {
         display: flex;
         gap: 16px;
@@ -50,14 +95,34 @@
         flex: 1;
         min-width: 160px;
       }
-      .live-card .n { font-size: 40px; font-weight: 800; line-height: 1; }
-      .live-card .l { font-size: 13px; opacity: 0.85; margin-top: 6px; }
+      .live-card .n {
+        font-size: 40px;
+        font-weight: 800;
+        line-height: 1;
+      }
+      .live-card .l {
+        font-size: 13px;
+        opacity: 0.85;
+        margin-top: 6px;
+      }
       .live-card .dot {
-        display: inline-block; width: 9px; height: 9px; border-radius: 50%;
-        background: var(--success); margin-right: 6px;
+        display: inline-block;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--success);
+        margin-right: 6px;
         animation: pulse 1.6s infinite;
       }
-      @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.3;
+        }
+      }
       .grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -70,8 +135,15 @@
         border-radius: 12px;
         padding: 14px 16px;
       }
-      .stat .n { font-size: 24px; font-weight: 700; }
-      .stat .l { font-size: 12px; color: var(--muted); margin-top: 4px; }
+      .stat .n {
+        font-size: 24px;
+        font-weight: 700;
+      }
+      .stat .l {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 4px;
+      }
       .panel {
         background: var(--surface);
         border: 1px solid var(--border);
@@ -79,30 +151,118 @@
         padding: 18px;
         margin-bottom: 20px;
       }
-      .panel h2 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
-      .panel .sub { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
-      .controls { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
-      .controls button {
-        background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
-        border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer;
+      .panel h2 {
+        font-size: 15px;
+        font-weight: 600;
+        margin-bottom: 4px;
       }
-      .controls button.active { background: var(--primary); border-color: var(--primary); }
-      canvas { max-height: 320px; }
-      .err { color: #f87171; font-size: 13px; }
+      .panel .sub {
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 14px;
+      }
+      .controls {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 14px;
+        flex-wrap: wrap;
+      }
+      .controls button {
+        background: var(--surface-2);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .controls button.active {
+        background: var(--primary);
+        border-color: var(--primary);
+      }
+      canvas {
+        max-height: 320px;
+      }
+      .err {
+        color: #f87171;
+        font-size: 13px;
+      }
+      .breakdowns {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+      }
+      .bd-group h3 {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-bottom: 10px;
+      }
+      .bd-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        font-size: 13px;
+      }
+      .bd-row .lbl {
+        width: 92px;
+        flex-shrink: 0;
+        color: var(--text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .bd-bar {
+        flex: 1;
+        height: 8px;
+        background: var(--surface-2);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+      .bd-bar > span {
+        display: block;
+        height: 100%;
+        background: var(--primary);
+        border-radius: 4px;
+      }
+      .bd-row .cnt {
+        width: 28px;
+        text-align: right;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .bd-bots {
+        margin-top: 14px;
+        font-size: 12px;
+        color: var(--muted);
+      }
     </style>
   </head>
   <body>
     <header>
       <h1>📊 Patentechi Analytics</h1>
-      <span class="updated" id="updated">loading…</span>
+      <div class="head-right">
+        <span class="updated" id="updated">loading…</span>
+        <button id="refresh-btn" title="Refresh now">
+          <span class="ic">↻</span> Refresh
+        </button>
+      </div>
     </header>
 
     <div class="live">
       <div class="live-card">
-        <div class="n"><span class="dot"></span><span id="active-users">–</span></div>
+        <div class="n">
+          <span class="dot"></span><span id="active-users">–</span>
+        </div>
         <div class="l">Active users right now</div>
       </div>
-      <div class="live-card" style="background: linear-gradient(135deg,#065f46,#059669)">
+      <div
+        class="live-card"
+        style="background: linear-gradient(135deg, #065f46, #059669)"
+      >
         <div class="n" id="active-sessions">–</div>
         <div class="l">Active sessions right now</div>
       </div>
@@ -123,6 +283,15 @@
       <div class="err" id="chart-err"></div>
     </div>
 
+    <div class="panel">
+      <h2>Who's using it</h2>
+      <div class="sub" id="bd-sub">
+        By distinct device · last 7 days · bots excluded
+      </div>
+      <div class="breakdowns" id="breakdowns"></div>
+      <div class="err" id="bd-err"></div>
+    </div>
+
     <script>
       const REFRESH_MS = 15000;
       let chart;
@@ -130,7 +299,8 @@
 
       function fmtDur(s) {
         if (!s) return "0s";
-        const m = Math.floor(s / 60), sec = s % 60;
+        const m = Math.floor(s / 60),
+          sec = s % 60;
         return m ? `${m}m ${sec}s` : `${sec}s`;
       }
 
@@ -139,7 +309,8 @@
           const r = await fetch("/api/summary");
           const d = await r.json();
           document.getElementById("active-users").textContent = d.active_users;
-          document.getElementById("active-sessions").textContent = d.active_sessions;
+          document.getElementById("active-sessions").textContent =
+            d.active_sessions;
           const cards = [
             ["Users today", d.users_today],
             ["Sessions today", d.sessions_today],
@@ -153,7 +324,7 @@
           document.getElementById("stats").innerHTML = cards
             .map(
               ([l, n]) =>
-                `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`
+                `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`,
             )
             .join("");
           document.getElementById("updated").textContent =
@@ -168,16 +339,22 @@
         errEl.textContent = "";
         try {
           const r = await fetch(
-            `/api/timeseries?days=${range.days}&bucket_minutes=${range.bucket}`
+            `/api/timeseries?days=${range.days}&bucket_minutes=${range.bucket}`,
           );
           const d = await r.json();
           const labels = d.points.map((p) => {
             const dt = new Date(p.t * 1000);
             return range.days <= 1
-              ? dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+              ? dt.toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
               : dt.toLocaleDateString([], { month: "short", day: "numeric" }) +
                   " " +
-                  dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                  dt.toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
           });
           const users = d.points.map((p) => p.users);
           const sessions = d.points.map((p) => p.sessions);
@@ -223,7 +400,11 @@
                 },
                 scales: {
                   x: {
-                    ticks: { color: "#64748b", maxTicksLimit: 12, autoSkip: true },
+                    ticks: {
+                      color: "#64748b",
+                      maxTicksLimit: 12,
+                      autoSkip: true,
+                    },
                     grid: { color: "rgba(148,163,184,0.08)" },
                   },
                   y: {
@@ -240,21 +421,74 @@
         }
       }
 
-      document.getElementById("range-controls").addEventListener("click", (e) => {
-        const btn = e.target.closest("button");
-        if (!btn) return;
-        document
-          .querySelectorAll("#range-controls button")
-          .forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-        range = { days: +btn.dataset.days, bucket: +btn.dataset.bucket };
-        loadChart();
-      });
+      document
+        .getElementById("range-controls")
+        .addEventListener("click", (e) => {
+          const btn = e.target.closest("button");
+          if (!btn) return;
+          document
+            .querySelectorAll("#range-controls button")
+            .forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          range = { days: +btn.dataset.days, bucket: +btn.dataset.bucket };
+          loadChart();
+          loadBreakdowns();
+        });
 
-      function refresh() {
-        loadSummary();
-        loadChart();
+      function renderGroup(title, items) {
+        const total = items.reduce((s, it) => s + it.count, 0) || 1;
+        const rows = items
+          .filter((it) => it.count > 0)
+          .map((it) => {
+            const pct = Math.round((it.count / total) * 100);
+            return `<div class="bd-row">
+                <span class="lbl" title="${it.label}">${it.label}</span>
+                <span class="bd-bar"><span style="width:${pct}%"></span></span>
+                <span class="cnt">${it.count}</span>
+              </div>`;
+          })
+          .join("");
+        return `<div class="bd-group"><h3>${title}</h3>${rows || '<div class="bd-row"><span class="lbl">–</span></div>'}</div>`;
       }
+
+      async function loadBreakdowns() {
+        const errEl = document.getElementById("bd-err");
+        errEl.textContent = "";
+        try {
+          const r = await fetch("/api/breakdowns?days=" + range.days);
+          const d = await r.json();
+          document.getElementById("bd-sub").textContent =
+            `By distinct device · last ${d.days} day(s) · ${d.real_users} users · bots excluded`;
+          const html =
+            renderGroup("Device", d.device) +
+            renderGroup("OS", d.os) +
+            renderGroup("Browser", d.browser) +
+            renderGroup("Install", d.install);
+          document.getElementById("breakdowns").innerHTML = html;
+          const bd = document.getElementById("breakdowns");
+          if (d.bots) {
+            bd.insertAdjacentHTML(
+              "beforeend",
+              `<div class="bd-bots">🤖 ${d.bots} bot/crawler device(s) excluded</div>`,
+            );
+          }
+        } catch (e) {
+          errEl.textContent = "Could not load breakdowns.";
+        }
+      }
+
+      async function refresh() {
+        const btn = document.getElementById("refresh-btn");
+        btn.disabled = true;
+        btn.classList.add("spinning");
+        try {
+          await Promise.all([loadSummary(), loadChart(), loadBreakdowns()]);
+        } finally {
+          btn.classList.remove("spinning");
+          btn.disabled = false;
+        }
+      }
+      document.getElementById("refresh-btn").addEventListener("click", refresh);
       refresh();
       setInterval(refresh, REFRESH_MS);
     </script>

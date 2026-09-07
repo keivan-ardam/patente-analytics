@@ -71,7 +71,12 @@ async def ingest_event(event: EventIn, request: Request):
 
     if event.type == "session_start":
         is_new_session = db.start_session(
-            event.session_id, event.device_id, ts, user_agent, country
+            event.session_id,
+            event.device_id,
+            ts,
+            user_agent,
+            country,
+            pwa=bool(event.pwa),
         )
         is_new_device = db.upsert_device(
             event.device_id, ts, country, new_session=is_new_session
@@ -122,6 +127,13 @@ async def api_timeseries(bucket_minutes: int = 30, days: int = 7):
             db.now(), bucket_seconds=bucket_minutes * 60, days=days
         ),
     }
+
+
+@app.get("/api/breakdowns")
+async def api_breakdowns(days: int = 7):
+    """Device / OS / browser / install-type breakdown of users (bot-filtered)."""
+    days = max(1, min(days, 90))
+    return db.get_breakdowns(db.now(), days=days)
 
 
 # ---------- Dashboard page ----------

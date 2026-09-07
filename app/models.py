@@ -12,6 +12,8 @@ class EventIn(BaseModel):
     device_id: str = Field(..., min_length=8, max_length=64)
     # Optional context
     page: Optional[str] = Field(default=None, max_length=200)
+    # True when the app runs as an installed PWA (display-mode: standalone).
+    pwa: Optional[bool] = Field(default=None)
 
 
 class StatsOut(BaseModel):

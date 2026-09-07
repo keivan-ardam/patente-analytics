@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     last_seen    INTEGER NOT NULL,
     ended_at     INTEGER,
     user_agent   TEXT,
-    country      TEXT
+    country      TEXT,
+    pwa          INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_last_seen ON sessions(last_seen);
@@ -40,6 +41,12 @@ def init_db() -> None:
         os.makedirs(db_dir, exist_ok=True)
     with _connect() as conn:
         conn.executescript(_SCHEMA)
+        # Migrate: add `pwa` column to pre-existing sessions tables.
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(sessions)")}
+        if "pwa" not in cols:
+            conn.execute(
+                "ALTER TABLE sessions ADD COLUMN pwa INTEGER NOT NULL DEFAULT 0"
+            )
 
 
 @contextmanager
@@ -93,6 +100,7 @@ def start_session(
     ts: int,
     user_agent: Optional[str],
     country: Optional[str],
+    pwa: bool = False,
 ) -> bool:
     """Create a session if it doesn't exist. Returns True if newly created."""
     with _connect() as conn:
@@ -107,9 +115,9 @@ def start_session(
             )
             return False
         conn.execute(
-            "INSERT INTO sessions (session_id, device_id, started_at, last_seen, ended_at, user_agent, country) "
-            "VALUES (?, ?, ?, ?, NULL, ?, ?)",
-            (session_id, device_id, ts, ts, user_agent, country),
+            "INSERT INTO sessions (session_id, device_id, started_at, last_seen, ended_at, user_agent, country, pwa) "
+            "VALUES (?, ?, ?, ?, NULL, ?, ?, ?)",
+            (session_id, device_id, ts, ts, user_agent, country, 1 if pwa else 0),
         )
         return True
 
@@ -294,6 +302,76 @@ def get_summary(ts: int, active_window_seconds: int) -> dict:
         "total_devices": total_devices,
         "total_sessions": total_sessions,
         "avg_session_seconds": round(avg_dur or 0),
+    }
+
+
+def get_breakdowns(ts: int, days: int = 7) -> dict:
+    """Device / OS / browser / PWA breakdowns over the last `days`.
+
+    Counts are by DISTINCT device (so multiple tabs/sessions on one phone count
+    once). Bots are excluded from the breakdowns but reported separately.
+    """
+    from . import useragent
+
+    window = days * 86400
+    start = ts - window
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT device_id, user_agent, pwa FROM sessions WHERE started_at >= ?",
+            (start,),
+        ).fetchall()
+
+    # First UA seen per device wins (stable classification per device).
+    seen: dict[str, dict] = {}
+    for r in rows:
+        dev = r["device_id"]
+        if dev in seen:
+            # keep pwa=1 if any session for this device was standalone
+            if r["pwa"]:
+                seen[dev]["pwa"] = True
+            continue
+        cls = useragent.classify(r["user_agent"])
+        cls["pwa"] = bool(r["pwa"])
+        seen[dev] = cls
+
+    device: dict[str, int] = {}
+    os_: dict[str, int] = {}
+    browser: dict[str, int] = {}
+    bots = 0
+    pwa_users = 0
+    browser_users = 0
+
+    for cls in seen.values():
+        if cls["is_bot"]:
+            bots += 1
+            continue
+        device[cls["device"]] = device.get(cls["device"], 0) + 1
+        os_[cls["os"]] = os_.get(cls["os"], 0) + 1
+        browser[cls["browser"]] = browser.get(cls["browser"], 0) + 1
+        if cls["pwa"]:
+            pwa_users += 1
+        else:
+            browser_users += 1
+
+    def _sorted(d: dict) -> list:
+        return sorted(
+            [{"label": k, "count": v} for k, v in d.items()],
+            key=lambda x: x["count"],
+            reverse=True,
+        )
+
+    real_users = sum(device.values())
+    return {
+        "days": days,
+        "real_users": real_users,
+        "bots": bots,
+        "device": _sorted(device),
+        "os": _sorted(os_),
+        "browser": _sorted(browser),
+        "install": [
+            {"label": "Installed (PWA)", "count": pwa_users},
+            {"label": "Browser", "count": browser_users},
+        ],
     }
 
 

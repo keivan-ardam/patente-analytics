@@ -2,7 +2,8 @@
 
 A tiny, privacy-friendly analytics + Telegram notification service for the
 **Patentechi** web app. It tracks how many people use the app (active users now,
-totals, daily counts) and sends you a Telegram message when sessions start.
+totals, daily counts), serves a small **web dashboard** with a live active-users
+chart, and sends you a focused Telegram message when sessions start.
 
 It runs on a **Raspberry Pi** at home, exposed to the internet through a
 **Cloudflare Tunnel** — no open ports, no exposed home IP, free HTTPS,
@@ -59,7 +60,7 @@ the tunnel to the Pi. Secure, and works behind home NAT with a dynamic IP.
 | ---------------- | ---------------- | --------------------------------------------------------------------------------------------- |
 | **Aruba**        | Domain registrar | Bought `patentechi.it` here. Holds registration only — DNS is delegated to Cloudflare.        |
 | **Cloudflare**   | DNS + Tunnel     | Manages DNS for `patentechi.it`, provides the secure tunnel to the Pi, issues SSL. Free plan. |
-| **Render**       | App hosting      | Hosts the Patentechi Vue app (the frontend users load).                                       |
+| **Render**       | App hosting      | Hosts the Patentechi Vue app as a **Static Site** (CDN, free — no cold start).                |
 | **Raspberry Pi** | Analytics server | Runs the FastAPI service, SQLite DB, cloudflared tunnel, and Telegram bot. Lives at home.     |
 | **Telegram**     | Notifications    | A bot messages you when sessions happen and answers button/command queries.                   |
 
@@ -77,13 +78,16 @@ the tunnel to the Pi. Secure, and works behind home NAT with a dynamic IP.
 
 ### The subdomains
 
-| Hostname                              | Points to                          | Cloudflare proxy    | Purpose                |
-| ------------------------------------- | ---------------------------------- | ------------------- | ---------------------- |
-| `patentechi.it` / `www.patentechi.it` | Render (`patentechi.onrender.com`) | **DNS only** (grey) | The Patentechi web app |
-| `analytics.patentechi.it`             | Pi (via Cloudflare Tunnel)         | proxied by tunnel   | This analytics service |
+| Hostname                        | Points to                                            | Cloudflare proxy  | Purpose                |
+| ------------------------------- | ---------------------------------------------------- | ----------------- | ---------------------- |
+| `www.patentechi.it` (canonical) | Render **Static Site** (`patente-qqlr.onrender.com`) | Proxied (orange)  | The Patentechi web app |
+| `patentechi.it` (apex)          | 301 → `www` (Cloudflare redirect)                    | Proxied (orange)  | Redirect to canonical  |
+| `analytics.patentechi.it`       | Pi (via Cloudflare Tunnel)                           | proxied by tunnel | This analytics service |
 
-> The Render records must be **DNS only (grey cloud)** — if proxied (orange),
-> Render can't verify the domain or issue its SSL certificate.
+> The web app is now a **Render Static Site** (CDN-served, always up, no cold
+> start). Its Cloudflare records are **Proxied (orange)** via CNAME to the static
+> site target, using CNAME flattening at the apex. Render verifies the domain
+> through the added Custom Domain, not the proxy mode.
 
 ---
 
@@ -121,7 +125,7 @@ Location: `~/patente-analytics/.env` on the Pi. **Gitignored — never committed
 | `TELEGRAM_BOT_TOKEN`      | **REAL SECRET.** Token from @BotFather. Server-side only.               | `8970...` (secret)                                |
 | `TELEGRAM_CHAT_ID`        | Your Telegram chat ID.                                                  | `255859351`                                       |
 | `ALLOWED_ORIGINS`         | CORS allow-list. Which websites may call the API from a browser.        | `https://patentechi.it,https://www.patentechi.it` |
-| `NOTIFY_COOLDOWN_SECONDS` | Min seconds between "new session" pings (batches). `0` = every session. | `300`                                             |
+| `NOTIFY_COOLDOWN_SECONDS` | Min seconds between "new session" pings (batches). `0` = every session. | `1800` (30 min)                                   |
 | `NOTIFY_ON_SESSION_END`   | Also notify on session end?                                             | `false`                                           |
 | `SESSION_TIMEOUT_SECONDS` | Session is "active" if seen within this window.                         | `90`                                              |
 | `HOST` / `PORT`           | uvicorn bind (local; tunnel reaches it).                                | `127.0.0.1` / `8000`                              |
@@ -159,11 +163,27 @@ There is **no client secret** — see the security model below.
 
 ## Endpoints & API docs
 
-| Method | Path      | Purpose                                              |
-| ------ | --------- | ---------------------------------------------------- |
-| `POST` | `/event`  | Ingest `session_start` / `heartbeat` / `session_end` |
-| `GET`  | `/stats`  | Active users, totals, today's counts                 |
-| `GET`  | `/health` | Health check                                         |
+| Method | Path              | Purpose                                                             |
+| ------ | ----------------- | ------------------------------------------------------------------- |
+| `GET`  | `/`               | **Web dashboard** (HTML page, live chart + stat cards)              |
+| `POST` | `/event`          | Ingest `session_start` / `heartbeat` / `session_end`                |
+| `GET`  | `/stats`          | Active users, totals, today's counts (legacy summary)               |
+| `GET`  | `/api/summary`    | Focused metrics for the dashboard (live + rolling + avg)            |
+| `GET`  | `/api/timeseries` | Active users/sessions per time bucket (`?days=7&bucket_minutes=30`) |
+| `GET`  | `/health`         | Health check                                                        |
+
+### Web dashboard
+
+`https://analytics.patentechi.it/` serves a single-page dashboard (`app/dashboard.html`):
+
+- Live **active users** and **active sessions** cards (auto-refresh every 15s)
+- **Active-users-over-time chart** (Chart.js) — active users & sessions per time
+  bucket, with range presets: 24h·15m, 7d·30m, 7d·1h, 30d·3h
+- Stat cards: users/sessions today, new users today, 7-day totals, avg session
+
+The time series is computed from stored session spans: a session counts toward
+every bucket its `[started_at, last_seen]` window overlaps. No extra data
+collection is needed — history is reconstructed from existing rows.
 
 Auto-generated interactive docs (FastAPI):
 
@@ -187,19 +207,24 @@ curl -X POST https://analytics.patentechi.it/event \
 
 The bot both **sends** notifications and **responds** to button presses.
 
+The bot is intentionally **focused** — the rich charts live on the web dashboard,
+so the bot stays quiet.
+
 ### Notifications
 
-- On a new session (respecting `NOTIFY_COOLDOWN_SECONDS`), you get a message with
-  active/today/total counts and an inline keyboard.
+- On a new session (respecting `NOTIFY_COOLDOWN_SECONDS`, default **30 min**),
+  you get a **compact one-line** ping: `🟢 New session · 👥 3 active (4 sess)`.
+  No inline keyboard on auto-pings, to keep it quiet.
 
 ### Interactive buttons / commands
 
-Send `/start` to the bot to get the menu. Buttons:
+Send `/start` to the bot to get the menu. Just two buttons:
 
-- **📊 Live Stats** — active now, today, totals
-- **📅 Today** — new users today, sessions today, active now
-- **📈 7-Day Report** — day-by-day breakdown + week total
-- **🌍 Countries** — top countries by sessions
+- **📊 Live** — active now + today's counts, with a link to the dashboard
+- **📈 Dashboard** — opens `https://analytics.patentechi.it/` (the full charts)
+
+(The old Today / 7-Day / Countries buttons were removed — that detail now lives
+on the web dashboard.)
 
 Implemented via long-polling (`getUpdates`) in a background task started by the
 FastAPI lifespan hook. No webhook needed.
@@ -379,14 +404,15 @@ sudo systemctl restart patente-analytics
 
 ### Common issues
 
-| Symptom                                 | Likely cause                               | Fix                                        |
-| --------------------------------------- | ------------------------------------------ | ------------------------------------------ |
-| No Telegram messages                    | Wrong token/chat ID, or cooldown active    | Check `.env`; logs for `sendMessage` 200   |
-| Events not arriving                     | Tunnel down, or wrong `VITE_ANALYTICS_URL` | `systemctl status cloudflared`; verify URL |
-| CORS error in browser                   | Origin not in `ALLOWED_ORIGINS`            | Add app origin to `.env`, restart          |
-| `analytics.patentechi.it` not resolving | Fresh DNS, local cache                     | Wait / flush DNS / use `1.1.1.1`           |
-| Render domain won't verify              | Cloudflare record is "Proxied" (orange)    | Set to **DNS only** (grey cloud)           |
-| URL changed after reboot                | Using a quick tunnel                       | Use the **named** tunnel (above)           |
+| Symptom                                     | Likely cause                               | Fix                                                     |
+| ------------------------------------------- | ------------------------------------------ | ------------------------------------------------------- |
+| No Telegram messages                        | Wrong token/chat ID, or cooldown active    | Check `.env`; logs for `sendMessage` 200                |
+| Events not arriving                         | Tunnel down, or wrong `VITE_ANALYTICS_URL` | `systemctl status cloudflared`; verify URL              |
+| CORS error in browser                       | Origin not in `ALLOWED_ORIGINS`            | Add app origin to `.env`, restart                       |
+| `analytics.patentechi.it` not resolving     | Fresh DNS, local cache                     | Wait / flush DNS / use `1.1.1.1`                        |
+| Deep-link refresh 404s (e.g. `/flashcards`) | Static Site missing SPA rewrite            | Add rewrite `/*` → `/index.html` on the site            |
+| Render domain "in use on another service"   | Domain still attached to the old service   | Remove it from the old service, then add to the new one |
+| URL changed after reboot                    | Using a quick tunnel                       | Use the **named** tunnel (above)                        |
 
 ---
 
@@ -407,13 +433,22 @@ Chronological record of what was actually set up (for future reference):
 7. **Named tunnel:** `cloudflared tunnel login` (via `ssh -tt`), created tunnel
    `patente-analytics`, routed DNS to `analytics.patentechi.it`, wrote `config.yml`,
    installed + enabled the `cloudflared` systemd service. Stopped the quick tunnel.
-8. **App bot:** added interactive Telegram buttons (Live Stats / Today / 7-Day /
-   Countries) via a long-polling background task.
-9. **App domain:** in Render added `patentechi.it` + `www.patentechi.it`; in Cloudflare
-   added two CNAMEs → `patentechi.onrender.com` set to **DNS only (grey)**; Render
-   verified + issued SSL.
-10. **CORS hardening:** changed `ALLOWED_ORIGINS` from `*` to
-    `https://patentechi.it,https://www.patentechi.it`.
+8. **App bot:** added interactive Telegram buttons via a long-polling background task.
+9. **App domain:** added `patentechi.it` + `www.patentechi.it` as Custom Domains in
+   Render; pointed Cloudflare records at the Render service; Render verified + SSL.
+10. **CORS hardening:** changed `ALLOWED_ORIGINS` from `*` to the real origins
+    (`https://patentechi.it,https://www.patentechi.it`).
+11. **Static-site migration (UI):** the Patentechi web app was moved from a Render
+    Docker/nginx **web service** to a Render **Static Site** (CDN, free, no cold
+    start). Cloudflare `www` CNAME now points at the static site target
+    (`patente-qqlr.onrender.com`, Proxied); a `/* → /index.html` **rewrite** was
+    added so deep-link refresh works. Old paid web service retired.
+12. **Web dashboard:** added `/api/summary` + `/api/timeseries` and a
+    `app/dashboard.html` page at `/` — live active count + active-users chart
+    (30-min buckets over the last week, selectable ranges) + key stat cards.
+13. **Bot focus:** reduced the Telegram bot to two buttons (**Live** + **Dashboard**
+    link), made auto session-start pings a quiet one-liner (no keyboard), and raised
+    `NOTIFY_COOLDOWN_SECONDS` default to `1800` (30 min).
 
 ---
 
