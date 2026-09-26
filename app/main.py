@@ -116,10 +116,12 @@ async def api_summary():
 
 
 @app.get("/api/timeseries")
-async def api_timeseries(bucket_minutes: int = 30, days: int = 7):
-    """Active users & sessions per time bucket over the last N days."""
-    bucket_minutes = max(5, min(bucket_minutes, 240))
-    days = max(1, min(days, 30))
+async def api_timeseries(bucket_minutes: int = 30, days: float = 7):
+    """Active users & sessions per time bucket over the last N days.
+
+    Also accepts sub-day windows via `days` as a float (e.g. 0.25 = 6h)."""
+    bucket_minutes = max(5, min(bucket_minutes, 1440))
+    days = max(0.05, min(days, 60))
     return {
         "bucket_minutes": bucket_minutes,
         "days": days,
