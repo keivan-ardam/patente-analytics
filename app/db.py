@@ -205,10 +205,10 @@ def get_active_timeseries(
     overlaps. Active users = distinct devices with any overlapping session in
     the bucket. Buckets are aligned to bucket_seconds boundaries (UTC).
     """
-    window = days * 86400
+    window = int(days * 86400)
     start = ((ts - window) // bucket_seconds) * bucket_seconds
     end = (ts // bucket_seconds + 1) * bucket_seconds
-    n = (end - start) // bucket_seconds
+    n = int((end - start) // bucket_seconds)
 
     # Pull only sessions that overlap the window at all.
     with _connect() as conn:
