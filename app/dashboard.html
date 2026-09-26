@@ -345,28 +345,28 @@
       const RANGES = {
         "6h": {
           days: 0.25,
-          bucket: 15,
+          bucket: 10,
           style: "time",
           bdDays: 1,
           name: "last 6 hours",
         },
         daily: {
           days: 1,
-          bucket: 60,
+          bucket: 15,
           style: "time",
           bdDays: 1,
           name: "last 24 hours",
         },
         weekly: {
           days: 7,
-          bucket: 360,
+          bucket: 60,
           style: "day",
           bdDays: 7,
           name: "last 7 days",
         },
         monthly: {
           days: 30,
-          bucket: 1440,
+          bucket: 360,
           style: "date",
           bdDays: 30,
           name: "last 30 days",
